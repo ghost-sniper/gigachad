@@ -1,0 +1,25 @@
+.{
+    .name = .gigachad,
+    .version = "0.1.0",
+    // Changing this has security and trust implications.
+    .fingerprint = 0x49ef2330866a4177,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        // SSH/SFTP 实现，从源码静态编译（见 build.zig）。
+        .libssh2 = .{
+            .url = "https://github.com/libssh2/libssh2/releases/download/libssh2-1.11.1/libssh2-1.11.1.tar.gz",
+            .hash = "N-V-__8AAOj5TwB7cbD38OzT3MDLCVnrddaX80kE_mWyrfXf",
+        },
+        // libssh2 的加密后端。
+        .mbedtls = .{
+            .url = "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.4/mbedtls-3.6.4-easy-make-lib.tar.xz",
+            .hash = "N-V-__8AAH5NwAJ8yZnYrT0xWbfSINV2G26IrQqqpo0j5Cn0",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
