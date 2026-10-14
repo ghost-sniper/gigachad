@@ -137,13 +137,19 @@ jobs:
           "$RUNNER_TEMP/gigachad-deb-check/usr/bin/gigachad" --version
           rpm -qpl "$rpm" | grep -Fx /usr/bin/gigachad
 
-      - name: Upload Linux packages
+      - name: Upload Linux DEB package
         uses: actions/upload-artifact@v4
         with:
-          name: gigachad-linux-x86_64
-          path: |
-            dist/*.deb
-            dist/*.rpm
+          name: gigachad-linux-x86_64-deb
+          path: dist/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Linux RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gigachad-linux-x86_64-rpm
+          path: dist/*.rpm
           if-no-files-found: error
           retention-days: 30
 
