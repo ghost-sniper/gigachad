@@ -3,7 +3,7 @@
     .version = "0.1.0",
     // Changing this has security and trust implications.
     .fingerprint = 0x49ef2330866a4177,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         // SSH/SFTP 实现，从源码静态编译（见 build.zig）。
         .libssh2 = .{

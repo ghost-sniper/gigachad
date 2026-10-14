@@ -31,7 +31,7 @@ const Session = struct {
         s.* = .{ .sock = undefined, .session = undefined, .sftp = undefined, .diag = diag };
 
         var host_z: [256]u8 = undefined;
-        const host = std.fmt.bufPrintZ(&host_z, "{s}", .{url.host}) catch return error.HostNameTooLong;
+        const host = std.mem.printSentinel(&host_z, "{s}", .{url.host}, 0) catch return error.HostNameTooLong;
         if (c.gigachad_tcp_connect(host.ptr, url.port, &s.sock) != 0) {
             diag.set("无法连接 {s}:{d}", .{ url.host, url.port });
             return error.ConnectionFailed;
@@ -81,7 +81,7 @@ const Session = struct {
         const found: c_int = blk: {
             const home = ctx.home orelse break :blk c.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND;
             var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-            const path = std.fmt.bufPrintZ(&path_buf, "{s}/.ssh/known_hosts", .{home}) catch
+            const path = std.mem.printSentinel(&path_buf, "{s}/.ssh/known_hosts", .{home}, 0) catch
                 break :blk c.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND;
             const kh = c.libssh2_knownhost_init(s.session) orelse return error.OutOfMemory;
             defer c.libssh2_knownhost_free(kh);
@@ -89,7 +89,7 @@ const Session = struct {
                 break :blk c.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND;
 
             var host_z: [256]u8 = undefined;
-            const host = std.fmt.bufPrintZ(&host_z, "{s}", .{url.host}) catch unreachable;
+            const host = std.mem.printSentinel(&host_z, "{s}", .{url.host}, 0) catch unreachable;
             const typemask = c.LIBSSH2_KNOWNHOST_TYPE_PLAIN | c.LIBSSH2_KNOWNHOST_KEYENC_RAW | knownHostKeyType(key_type);
             break :blk c.libssh2_knownhost_checkp(kh, host.ptr, url.port, key, key_len, typemask, null);
         };
@@ -122,7 +122,7 @@ const Session = struct {
         };
         const ulen: c_uint = @intCast(user.len);
         var user_z: [256]u8 = undefined;
-        const user_c = std.fmt.bufPrintZ(&user_z, "{s}", .{user}) catch return error.UserNameTooLong;
+        const user_c = std.mem.printSentinel(&user_z, "{s}", .{user}, 0) catch return error.UserNameTooLong;
 
         const methods_ptr = c.libssh2_userauth_list(s.session, user_c.ptr, ulen);
         if (methods_ptr == null) {
@@ -163,10 +163,10 @@ const Session = struct {
     /// 文件不存在时返回 false，继续尝试其他方式。
     fn authKeyFile(s: *Session, user: [:0]const u8, path: []const u8, passphrase: ?[]const u8) !bool {
         var path_z: [std.fs.max_path_bytes]u8 = undefined;
-        const key = std.fmt.bufPrintZ(&path_z, "{s}", .{path}) catch return false;
+        const key = std.mem.printSentinel(&path_z, "{s}", .{path}, 0) catch return false;
         var pass_z: [1024]u8 = undefined;
         const pass: ?[*:0]const u8 = if (passphrase) |p|
-            (std.fmt.bufPrintZ(&pass_z, "{s}", .{p}) catch return error.PassphraseTooLong).ptr
+            (std.mem.printSentinel(&pass_z, "{s}", .{p}, 0) catch return error.PassphraseTooLong).ptr
         else
             null;
         const rc = c.libssh2_userauth_publickey_fromfile_ex(s.session, user.ptr, @intCast(user.len), null, key.ptr, pass);

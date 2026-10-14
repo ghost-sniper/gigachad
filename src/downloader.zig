@@ -265,6 +265,7 @@ fn isRetryable(err: anyerror) bool {
         error.MissingHost,
         error.UnsupportedUriScheme,
         error.UriMissingHost,
+        error.InvalidHostName,
         error.HttpBadStatus,
         error.FtpLoginFailed,
         error.FtpFileNotFound,

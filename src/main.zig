@@ -12,7 +12,7 @@ pub fn main(init: std.process.Init) !u8 {
     const gpa = init.gpa;
     const io = init.io;
 
-    if (builtin.os.tag == .windows) {
+    if (builtin.target.os.tag == .windows) {
         // 让控制台按 UTF-8 显示中文输出。
         _ = SetConsoleOutputCP(65001);
     }

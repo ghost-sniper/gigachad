@@ -11,20 +11,20 @@
 
 ## 构建
 
-需要 Zig 0.16.0。libssh2 和 mbedTLS 在构建时从源码静态编译，不依赖系统库。
+需要 Zig 0.17.0。libssh2 和 mbedTLS 在构建时从源码静态编译，不依赖系统库。
 
 ```bash
-zig build -Doptimize=ReleaseSafe
+zig build -Doptimize=safe
 ```
 
 交叉编译：
 
 ```bash
-zig build -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-musl
-zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-macos
+zig build -Doptimize=safe -Dtarget=x86_64-linux-musl
+zig build -Doptimize=safe -Dtarget=aarch64-macos
 ```
 
-测试：`zig build test`
+验证构建和测试：`zig build`、`zig build test`。
 
 ## 用法
 
@@ -67,6 +67,6 @@ gigachad -d downloads -i urls.txt
 
 需要注意的几点：
 
-- `src/http/Client.zig` 是 Zig 0.16.0 `std.http.Client` 的副本。它修复了经 HTTP 代理访问 HTTPS 时不在 CONNECT 隧道内建立 TLS 的问题。上游修复后可以删掉这个副本。
+- `src/http/Client.zig` 基于 Zig 0.16.0 `std.http.Client`，已适配 Zig 0.17.0。它修复了经 HTTP 代理访问 HTTPS 时不在 CONNECT 隧道内建立 TLS 的问题；0.17.0 上游仍未修复，因此保留此副本。
 - 所有平台都使用 mbedTLS 作为 libssh2 的加密后端，并开启 mbedTLS 的线程锁，因为并发的 SSH 会话共享同一个随机数生成器。这个后端不支持 ed25519 密钥，SFTP 公钥认证请使用 RSA 或 ECDSA 密钥，或者通过 ssh-agent。
 - 在 Windows 上，Zig 0.16 的 `std.Io` 通过 AFD 直接创建套接字，libssh2 无法使用这种句柄。所以 SFTP 连接由 `src/c/ssh_socket.c` 用标准 socket API 建立。
