@@ -1,0 +1,199 @@
+name: Build and package gigachad
+
+# 推送代码或合并其他分支到 main 后构建，也支持在 Actions 页面手动运行。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: "0.17.0"
+  # 来自 https://ziglang.org/download/index.json 的官方 SHA-256。
+  ZIG_LINUX_SHA256: "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
+  ZIG_WINDOWS_SHA256: "b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428"
+
+jobs:
+  linux:
+    name: Linux x86_64 DEB and RPM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Zig and packaging tools
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/zig-linux.tar.xz"
+          curl --fail --location --retry 3 \
+            "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" \
+            --output "$archive"
+          echo "$ZIG_LINUX_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$archive" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends rpm dpkg-dev ca-certificates
+
+      - name: Read package version
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import pathlib, re; text = pathlib.Path("build.zig.zon").read_text(); match = re.search(r"\.version\s*=\s*\"([0-9]+\.[0-9]+\.[0-9]+)\"", text); assert match, "Expected a numeric package version in build.zig.zon"; print(match[1])')"
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "PACKAGE_RELEASE=${GITHUB_RUN_NUMBER}.git${GITHUB_SHA:0:8}" >> "$GITHUB_ENV"
+
+      - name: Build and test Linux executable
+        run: |
+          set -euo pipefail
+          zig version
+          zig build -Doptimize=safe -Dtarget=x86_64-linux-musl
+          zig build test -Doptimize=safe -Dtarget=x86_64-linux-musl
+          ./zig-out/bin/gigachad --version
+
+      - name: Package DEB
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/gigachad-deb"
+          mkdir -p dist "$package_root/DEBIAN" "$package_root/usr/bin" \
+            "$package_root/usr/share/doc/gigachad"
+          install -m 0755 zig-out/bin/gigachad "$package_root/usr/bin/gigachad"
+          install -m 0644 README.md "$package_root/usr/share/doc/gigachad/README.md"
+          cat > "$package_root/DEBIAN/control" <<EOF
+          Package: gigachad
+          Version: ${PACKAGE_VERSION}-${PACKAGE_RELEASE}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: gigachad contributors <noreply@github.com>
+          Depends: ca-certificates
+          Homepage: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
+          Description: Multi-connection terminal downloader
+           Supports HTTP, HTTPS, FTP and SFTP with segmented downloads and resume.
+          EOF
+          dpkg-deb --build --root-owner-group "$package_root" \
+            "dist/gigachad_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_amd64.deb"
+
+      - name: Package RPM
+        run: |
+          set -euo pipefail
+          rpm_root="$RUNNER_TEMP/gigachad-rpm"
+          mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          install -m 0755 zig-out/bin/gigachad "$rpm_root/SOURCES/gigachad"
+          install -m 0644 README.md "$rpm_root/SOURCES/README.md"
+          cat > "$rpm_root/SPECS/gigachad.spec" <<EOF
+          %global debug_package %{nil}
+          Name: gigachad
+          Version: ${PACKAGE_VERSION}
+          Release: ${PACKAGE_RELEASE}
+          Summary: Multi-connection terminal downloader
+          License: Unspecified
+          URL: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
+          Source0: gigachad
+          Source1: README.md
+          BuildArch: x86_64
+          AutoReqProv: no
+          Requires: ca-certificates
+
+          %description
+          Supports HTTP, HTTPS, FTP and SFTP with segmented downloads and resume.
+
+          %prep
+
+          %build
+
+          %install
+          install -D -m 0755 %{SOURCE0} %{buildroot}/usr/bin/gigachad
+          install -D -m 0644 %{SOURCE1} %{buildroot}/usr/share/doc/gigachad/README.md
+
+          %files
+          /usr/bin/gigachad
+          %doc /usr/share/doc/gigachad/README.md
+          EOF
+          rpmbuild -bb --define "_topdir $rpm_root" --define "_build_id_links none" \
+            "$rpm_root/SPECS/gigachad.spec"
+          cp "$rpm_root"/RPMS/x86_64/*.rpm dist/
+
+      - name: Verify package contents
+        run: |
+          set -euo pipefail
+          deb="dist/gigachad_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_amd64.deb"
+          rpm="dist/gigachad-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.x86_64.rpm"
+          dpkg-deb --contents "$deb"
+          dpkg-deb --extract "$deb" "$RUNNER_TEMP/gigachad-deb-check"
+          test -x "$RUNNER_TEMP/gigachad-deb-check/usr/bin/gigachad"
+          cmp zig-out/bin/gigachad "$RUNNER_TEMP/gigachad-deb-check/usr/bin/gigachad"
+          "$RUNNER_TEMP/gigachad-deb-check/usr/bin/gigachad" --version
+          rpm -qpl "$rpm" | grep -Fx /usr/bin/gigachad
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: gigachad-linux-x86_64
+          path: |
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows x86_64 EXE
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Zig
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'zig-windows.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'zig'
+          Invoke-WebRequest -Uri "https://ziglang.org/download/$env:ZIG_VERSION/zig-x86_64-windows-$env:ZIG_VERSION.zip" -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+          if ($actualHash -ne $env:ZIG_WINDOWS_SHA256) { throw 'Zig archive checksum mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          Join-Path $destination "zig-x86_64-windows-$env:ZIG_VERSION" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build and test Windows executable
+        run: |
+          zig version
+          zig build -Doptimize=safe -Dtarget=x86_64-windows-gnu
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          zig build test -Doptimize=safe -Dtarget=x86_64-windows-gnu
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\zig-out\bin\gigachad.exe --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect Windows executable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $match = [regex]::Match((Get-Content -LiteralPath build.zig.zon -Raw), '\.version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"')
+          if (-not $match.Success) { throw 'Expected a numeric package version in build.zig.zon' }
+          $version = $match.Groups[1].Value
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item -LiteralPath zig-out/bin/gigachad.exe -Destination "dist/gigachad-$version-windows-x86_64.exe"
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: gigachad-windows-x86_64
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
