@@ -26,6 +26,17 @@ zig build -Doptimize=safe -Dtarget=aarch64-macos
 
 验证构建和测试：`zig build`、`zig build test`。
 
+清理项目构建产物（Windows、Linux、macOS）：
+
+```bash
+zig build clean
+```
+
+该命令删除项目根目录下的 `zig-out` 和 `.zig-cache`，目录不存在时也可重复执行。
+全局 Zig 缓存和 `zig-pkg` 依赖源码会保留。清理工具自身使用全局缓存编译，
+避免 Windows 上运行中的可执行文件阻止删除项目缓存。自定义的 `--prefix` 或
+`--cache-dir` 目录不在该命令的清理范围内。
+
 ## 用法
 
 ```

@@ -1,6 +1,20 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    const clean_step = b.step("clean", "Remove project zig-out and .zig-cache directories");
+    const clean_cmd = std.Build.Step.Run.create(b, "clean project artifacts");
+    clean_cmd.addFileArg(.zig_exe);
+    clean_cmd.addArg("run");
+    clean_cmd.addFileArg(b.path("tools/clean.zig"));
+    // Windows 不能删除运行中的可执行文件，因此清理工具不能编译到项目缓存中。
+    clean_cmd.addArg("--cache-dir");
+    clean_cmd.addDirectoryArg(b.graph.path(.global_cache, "gigachad-clean"));
+    clean_cmd.addArg("--global-cache-dir");
+    clean_cmd.addDirectoryArg(b.graph.path(.global_cache, ""));
+    clean_cmd.setCwd(b.path("."));
+    clean_cmd.has_side_effects = true;
+    clean_step.dependOn(&clean_cmd.step);
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 

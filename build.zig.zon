@@ -20,6 +20,7 @@
         "build.zig",
         "build.zig.zon",
         "src",
+        "tools",
         "README.md",
     },
 }
