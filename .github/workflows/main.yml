@@ -154,7 +154,7 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Windows x86_64 EXE
+    name: Windows x86_64 installer and portable EXE
     runs-on: windows-2025
     timeout-minutes: 30
     defaults:
@@ -193,13 +193,34 @@ jobs:
           $match = [regex]::Match((Get-Content -LiteralPath build.zig.zon -Raw), '\.version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"')
           if (-not $match.Success) { throw 'Expected a numeric package version in build.zig.zon' }
           $version = $match.Groups[1].Value
+          "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item -LiteralPath zig-out/bin/gigachad.exe -Destination "dist/gigachad-$version-windows-x86_64.exe"
+
+      - name: Build Windows installer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is not installed on the runner' }
+          & $compiler "/DAppVersion=$env:PACKAGE_VERSION" tools/windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify Windows installation and user PATH
+        run: |
+          ./tools/test-windows-installer.ps1 -Installer "dist/gigachad-$env:PACKAGE_VERSION-windows-x86_64-setup.exe"
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: gigachad-windows-x86_64
-          path: dist/*.exe
+          path: dist/gigachad-${{ env.PACKAGE_VERSION }}-windows-x86_64.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: gigachad-windows-x86_64-installer
+          path: dist/*-setup.exe
           if-no-files-found: error
           retention-days: 30

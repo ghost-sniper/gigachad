@@ -37,6 +37,19 @@ zig build clean
 避免 Windows 上运行中的可执行文件阻止删除项目缓存。自定义的 `--prefix` 或
 `--cache-dir` 目录不在该命令的清理范围内。
 
+## 安装
+
+GitHub Actions 的构建产物按平台提供安装包：
+
+- **Debian / Ubuntu**：下载 DEB 包后运行 `sudo apt install ./gigachad_*.deb`。
+- **Fedora / RHEL**：下载 RPM 包后运行 `sudo dnf install ./gigachad-*.rpm`。
+- **Windows x64**：下载 `gigachad-windows-x86_64-installer` 产物中的 `*-setup.exe`，
+  运行并允许管理员权限，将程序安装到 `C:\Program Files\gigachad\gigachad.exe`，
+  同时将安装目录添加到安装用户的 `Path`。重复安装不会重复添加；卸载时仅清理安装器添加的条目。
+  安装后重新打开终端即可使用 `gigachad`。`gigachad-windows-x86_64` 仍提供便携版 EXE，需自行配置 Path。
+
+Linux 的 DEB 和 RPM 均将可执行文件安装到 `/usr/bin/gigachad`，安装后可直接运行 `gigachad`。
+
 ## 用法
 
 ```
